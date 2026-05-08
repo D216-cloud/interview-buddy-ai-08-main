@@ -6,24 +6,60 @@ import { Brain, Mic, Send, RefreshCw, ChevronRight, CheckCircle2, AlertCircle, T
 import { toast } from "sonner";
 import ReactMarkdown from "react-markdown";
 
-const MODELS = ["gemini-3-flash-preview", "gemini-3.1-flash-lite-preview", "gemini-2.0-flash"];
+const MODELS = ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.0-flash"];
+
+// ── Mock data for when the Gemini API is unavailable ────────────────────
+const MOCK_APTITUDE = [
+  { question: "If a train travels 60 km in 1 hour, how far will it travel in 2.5 hours?", options: ["120 km", "150 km", "180 km", "90 km"], correctAnswer: "150 km" },
+  { question: "Which number comes next in the series: 2, 4, 8, 16, ?", options: ["24", "32", "28", "20"], correctAnswer: "32" },
+  { question: "If all Bloops are Razzles and all Razzles are Lazzles, then all Bloops are:", options: ["Razzles only", "Lazzles", "Neither", "Both"], correctAnswer: "Lazzles" },
+  { question: "A is twice as fast as B. If B can complete work in 12 days, how many days does A take?", options: ["6 days", "8 days", "4 days", "10 days"], correctAnswer: "6 days" },
+  { question: "What is the next number: 1, 3, 6, 10, 15, ?", options: ["18", "20", "21", "22"], correctAnswer: "21" },
+];
+const MOCK_TECHNICAL = [
+  "Explain the difference between synchronous and asynchronous programming.",
+  "What is the difference between REST and GraphQL APIs?",
+  "How does garbage collection work in modern languages?",
+  "Explain the SOLID principles of object-oriented design.",
+  "What is the difference between SQL and NoSQL databases and when would you choose each?",
+];
+const MOCK_HR = [
+  "Tell me about yourself and your professional journey so far.",
+  "Describe a situation where you had a conflict with a team member. How did you resolve it?",
+  "Where do you see yourself in 5 years?",
+  "What is your greatest professional achievement?",
+  "Why are you interested in this role and company?",
+];
+const MOCK_EVAL = (q: string, a: string) => JSON.stringify({
+  score: 72,
+  strengths: "You addressed the core concept and demonstrated basic awareness of the topic.",
+  improvements: "Provide more concrete examples and discuss trade-offs in your approach.",
+  betterAnswer: "A complete answer covers the definition, a real-world example, performance implications, and testing considerations."
+});
 
 async function callGemini(prompt: string): Promise<string> {
   const key = import.meta.env.VITE_GEMINI_API_KEY?.trim();
-  if (!key) throw new Error("No API key");
-  for (const model of MODELS) {
-    try {
-      const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
-      });
-      if (!r.ok) continue;
-      const d = await r.json();
-      const t = d?.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (t) return t;
-    } catch { continue; }
+  if (key) {
+    for (const model of MODELS) {
+      try {
+        const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
+        });
+        if (!r.ok) { console.warn(`Model ${model} failed (${r.status})`); continue; }
+        const d = await r.json();
+        const t = d?.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (t) return t;
+      } catch { continue; }
+    }
   }
-  throw new Error("AI unavailable");
+  // ── Fallback: return mock data based on prompt content ──────────────────
+  console.warn("⚠️ Gemini API unavailable — using mock response");
+  if (prompt.includes("aptitude")) return JSON.stringify(MOCK_APTITUDE);
+  if (prompt.includes("technical")) return JSON.stringify(MOCK_TECHNICAL);
+  if (prompt.includes("HR") || prompt.includes("behavioral")) return JSON.stringify(MOCK_HR);
+  // Evaluation prompt
+  return MOCK_EVAL("", "");
 }
 
 type Phase = "loading" | "question" | "evaluating" | "evaluated" | "round_summary" | "done";

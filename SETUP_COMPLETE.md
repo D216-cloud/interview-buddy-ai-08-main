@@ -379,6 +379,8 @@ Before considering setup complete:
 | Can't signup | Verify email format, strong password |
 | Stats not updating | Refresh page, check .env credentials |
 | Interview won't start | Select all 3 options, refresh page |
+| Gemini API 403 (Leaked) | Replace VITE_GEMINI_API_KEY in .env with a new one from ai.google.dev |
+| Gemini API 429 (Quota) | Wait for quota reset or upgrade your Gemini API plan |
 
 ---
 

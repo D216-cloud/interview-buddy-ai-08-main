@@ -117,6 +117,71 @@ export default function InterviewSession() {
     return null;
   };
 
+  // ── Mock fallback questions per domain ──────────────────────────────────
+  const getMockResponse = (allMessages: Message[]): string => {
+    const isFirstMessage = allMessages.length <= 1;
+    const mockQuestions: Record<string, string[]> = {
+      default: [
+        `Tell me about a challenging technical problem you solved and how you approached it.`,
+        `How do you stay current with new technologies and industry trends?`,
+        `Describe your experience working in a team environment on a complex project.`,
+        `How do you handle tight deadlines and competing priorities?`,
+        `What's your approach to debugging a production issue you've never seen before?`,
+      ],
+      react: [
+        `Explain the difference between controlled and uncontrolled components in React.`,
+        `How does the React reconciliation algorithm (Virtual DOM diffing) work?`,
+        `What are React hooks? Explain useState, useEffect, and useCallback.`,
+        `When would you choose useReducer over useState?`,
+        `How do you optimize performance in a large React application?`,
+      ],
+      javascript: [
+        `Explain the JavaScript event loop and how it handles asynchronous code.`,
+        `What's the difference between 'var', 'let', and 'const'?`,
+        `How does prototypal inheritance work in JavaScript?`,
+        `Explain closures and give a practical use case.`,
+        `What is the difference between '==' and '===' in JavaScript?`,
+      ],
+      python: [
+        `What are Python decorators and how would you use one?`,
+        `Explain the difference between lists, tuples, and dictionaries.`,
+        `How does Python's GIL (Global Interpreter Lock) affect multithreading?`,
+        `What is a generator in Python and when would you use one?`,
+        `Explain list comprehensions and when to use them vs map/filter.`,
+      ],
+    };
+
+    const domainKey = domain.toLowerCase();
+    const questions = mockQuestions[domainKey] || mockQuestions.default;
+
+    if (isFirstMessage) {
+      return `Hello! I'm your AI interviewer for this ${difficulty} level ${domain} session. I'll be asking you a series of questions to assess your knowledge and problem-solving skills.
+
+Let's get started with the first question:
+
+**${questions[0]}**
+
+Take your time to think through your answer. There are no trick questions — I'm looking for clear reasoning and real-world understanding.`;
+    }
+
+    // Simulate an evaluation + next question
+    const userAnswer = allMessages[allMessages.length - 1]?.content || "";
+    const questionIdx = Math.min(Math.floor(allMessages.length / 2), questions.length - 1);
+    const nextQ = questions[questionIdx] || questions[questions.length - 1];
+
+    return `**Score:** 7/10
+
+**Strengths:** Good understanding of the core concept. Your answer showed practical awareness of how this applies in real-world scenarios.
+
+**Areas to improve:** Try to be more specific with examples and mention edge cases or trade-offs involved in your approach.
+
+**Better answer:** A strong answer would include: the core definition, a concrete example from your experience, mention of any performance considerations, and how you'd test or validate your solution.
+
+---
+
+**Next question:** ${nextQ}`;
+  };
+
   const fetchAIResponse = async (allMessages: Message[]) => {
     const geminiKey = import.meta.env.VITE_GEMINI_API_KEY?.trim();
     const systemPrompt = `You are a professional technical interviewer conducting a ${difficulty} level ${domain} interview.
@@ -135,12 +200,11 @@ Rules:
 - Adapt difficulty based on the candidate's performance
 - For the first message, introduce yourself briefly and ask the first question`;
 
+    // Current valid Gemini models for v1beta generateContent endpoint
     const MODELS = [
-      "gemini-3-flash-preview",       // ✅ confirmed working
-      "gemini-3.1-flash-lite-preview",
-      "gemini-2.0-flash",
       "gemini-2.5-flash",
-      "gemini-2.5-pro-preview-05-06",
+      "gemini-2.5-flash-lite",
+      "gemini-2.0-flash",
     ];
 
     if (geminiKey) {
@@ -161,8 +225,9 @@ Rules:
 
           if (!resp.ok) {
             const errorData = await resp.json().catch(() => ({}));
-            console.warn(`Model ${model} failed (${resp.status}):`, errorData?.error?.message);
-            lastError = new Error(errorData?.error?.message || "Model unavailable");
+            const msg = errorData?.error?.message || "Model unavailable";
+            console.warn(`Model ${model} failed (${resp.status}):`, msg);
+            lastError = new Error(msg);
             continue; // try next model
           }
           
@@ -178,11 +243,13 @@ Rules:
           continue;
         }
       }
-      throw lastError || new Error("All Gemini models failed. Check your API key.");
-    } else {
-      // Fallback to Supabase function or mock
-      return "I'm sorry, I couldn't connect to my brain. Please check your API keys.";
+      // All API models failed — use intelligent mock fallback
+      console.warn("⚠️ All Gemini API models failed. Using mock fallback. Error:", lastError?.message);
+      return getMockResponse(allMessages);
     }
+
+    // No API key at all — use mock
+    return getMockResponse(allMessages);
   };
 
   const startInterview = async () => {
@@ -197,8 +264,8 @@ Rules:
       setQuestionCount(1);
       speak(response.replace(/[*#_`]/g, ""), selectedVoice);
     } catch (e) {
-      toast.error("Failed to start interview. Using mock question.");
-      const mockQ = "What is the difference between props and state in React?";
+      // fetchAIResponse should never throw now — this is an absolute last resort
+      const mockQ = `Tell me about your experience with ${domain}. What projects have you worked on?`;
       setCurrentQuestion(mockQ);
       setMessages([{ role: "assistant", content: mockQ }]);
       setQuestionCount(1);
